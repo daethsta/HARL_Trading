@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 nInst=100
 currentPos = np.zeros(nInst)
+longTermDir = np.zeros(nInst)
 indices = ["ind"]
 return_window = 1
 
@@ -28,11 +29,19 @@ def get_betas(returns, indices):
 
 def clip(position, price, max_val=10000, min_val=-10000):
     """Clips dollar position between -10k and 10k"""
-    return int(min(max(position * price, min_val), max_val))
-
+    dollar_val = position * price
+    if dollar_val > max_val:
+        return max_val / price
+    elif dollar_val < min_val:
+        return min_val/price
+    else:
+        return position
+    return int(min(max(dollar_val, min_val), max_val) / price)
+    
+    
 def getMyPosition (prcSoFar):
     global currentPos
-    
+    global longTermDir
     (nins,nt) = prcSoFar.shape
     data = pd.DataFrame(prcSoFar.T)
     
@@ -51,16 +60,16 @@ def getMyPosition (prcSoFar):
         price = data[i].iloc[-1]
         excess_return = returns[i].iloc[-1] - betas["ind"][i] * returns["ind"].iloc[-1] 
         vol_factor = std / avg_std * rate
-        fade = fade_rate * (currentPos[i] * price / trade_val) 
+        fade = fade_rate * (longTermDir[i] * price / trade_val) 
         
         sell_edge = max(edge - fade + vol_factor, 0)
         buy_edge = min(-edge - fade - vol_factor, 0)
         
         if excess_return > sell_edge:
-            currentPos[i] -= int( (trade_val / price ) * abs( (excess_return - sell_edge) / edge) )
-            
+            longTermDir[i] -= int( (trade_val / price ) * abs( (excess_return - sell_edge) / edge) )
+            currentPos[i] = clip(longTermDir[i], price)
+         
         elif excess_return < buy_edge:
-            currentPos[i] += int( (trade_val / price) * abs( (buy_edge - excess_return)  / edge) )
+            longTermDir[i] += int( (trade_val / price) * abs( (buy_edge - excess_return)  / edge) )
+            currentPos[i] = clip(longTermDir[i], price)
     return currentPos
-
-    
